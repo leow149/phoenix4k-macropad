@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phoenix4K Config</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* layout: top status bar, layer tabs, a 4-tile key row mirroring the physical pad, an expanding
+   editor panel below the selected tile, footer with device info + factory reset */
+:root{
+  --bg:#141210; --surface:#1d1a17; --surface-2:#262220; --line:#3a332d;
+  --fg:#f0ebe3; --fg-dim:#a89c8e; --fg-faint:#6b6056;
+  --accent:#ff8a3d; --accent-dim:#c96a2c; --accent-ink:#2a1608;
+  --good:#5fd4a8; --good-ink:#0d2a20;
+  --warn:#ffb545; --warn-ink:#332006;
+  --danger:#ff6b6b; --danger-ink:#331010;
+  --radius:10px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f7f3ee; --surface:#fffdfa; --surface-2:#efe8df; --line:#ddd3c6;
+    --fg:#241e18; --fg-dim:#6b5f50; --fg-faint:#9c9080;
+    --accent:#d9611c; --accent-dim:#b14f17; --accent-ink:#fff1e6;
+    --good:#1f8f66; --good-ink:#e7f8f0;
+    --warn:#a8690c; --warn-ink:#fdf2df;
+    --danger:#c43d3d; --danger-ink:#fdeaea;
+    color-scheme: light;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141210; --surface:#1d1a17; --surface-2:#262220; --line:#3a332d;
+  --fg:#f0ebe3; --fg-dim:#a89c8e; --fg-faint:#6b6056;
+  --accent:#ff8a3d; --accent-dim:#c96a2c; --accent-ink:#2a1608;
+  --good:#5fd4a8; --good-ink:#0d2a20;
+  --warn:#ffb545; --warn-ink:#332006;
+  --danger:#ff6b6b; --danger-ink:#331010;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg);
+  font:15px/1.5 'Sora', ui-sans-serif, system-ui, sans-serif;
+  padding-inline:16px; padding-block:20px 40px;
+  max-width:720px; margin-inline:auto;
+}
+.mono{font-family:'IBM Plex Mono', ui-monospace, monospace}
+h1{font:600 20px/1.2 'Sora', sans-serif; margin:0; letter-spacing:.2px}
+.sub{color:var(--fg-dim); font-size:13px; margin-top:2px}
+
+/* top bar */
+.topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap}
+.status{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-dim)}
+.dot{width:8px; height:8px; border-radius:50%; background:var(--fg-faint); flex:none}
+.dot.on{background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent)}
+.dot.err{background:var(--danger)}
+button{
+  font:600 13px 'Sora', sans-serif; border-radius:8px; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--fg); padding:9px 16px; cursor:pointer;
+  transition:border-color .15s, transform .05s;
+}
+button:hover{border-color:var(--fg-faint)}
+button:active{transform:scale(.97)}
+button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+button.primary:hover{border-color:var(--accent-dim)}
+button.ghost{background:transparent}
+button.danger-ghost{background:transparent; border-color:var(--line); color:var(--danger)}
+button.danger-ghost.armed{background:var(--danger); border-color:var(--danger); color:var(--danger-ink)}
+
+/* empty / connect state */
+.empty{
+  margin-top:48px; padding:32px 24px; border:1px dashed var(--line); border-radius:var(--radius);
+  text-align:center; color:var(--fg-dim);
+}
+.empty b{color:var(--fg); display:block; font:600 16px 'Sora', sans-serif; margin-bottom:6px}
+
+/* layer tabs */
+.layers{display:flex; gap:6px; margin:24px 0 14px}
+.layer-tab{
+  flex:1; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--surface);
+  color:var(--fg-dim); font:600 13px 'Sora', sans-serif; cursor:pointer; text-align:center;
+}
+.layer-tab.active{border-color:var(--accent); color:var(--fg); background:color-mix(in srgb, var(--accent) 12%, var(--surface))}
+
+/* key row */
+.keyrow{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+.keytile{
+  border:1px solid var(--line); background:var(--surface); border-radius:var(--radius);
+  padding:14px 10px; text-align:center; cursor:pointer; min-width:0;
+}
+.keytile.active{border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, var(--surface))}
+.keytile.is-fn{border-color:var(--warn)}
+.keytile .idx{font:600 11px 'IBM Plex Mono', monospace; color:var(--fg-faint); letter-spacing:.5px}
+.keytile .label{font:600 15px 'Sora', sans-serif; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.keytile .kind{font-size:11px; color:var(--fg-dim); margin-top:2px}
+
+/* editor panel */
+.panel{
+  margin-top:16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface);
+  padding:18px; display:flex; flex-direction:column; gap:14px;
+}
+.panel h2{font:600 15px 'Sora', sans-serif; margin:0}
+.row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.seg button{border:none; border-radius:0; background:var(--surface-2); font-size:12px; padding:8px 12px}
+.seg button.active{background:var(--accent); color:var(--accent-ink)}
+.mods{display:flex; gap:10px; flex-wrap:wrap}
+.mods label{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--fg-dim); cursor:pointer}
+.mods input{accent-color:var(--accent)}
+.capture{
+  border:1px dashed var(--line); border-radius:8px; padding:14px; text-align:center;
+  color:var(--fg-dim); font-size:13px; cursor:pointer; min-width:140px; flex:1;
+}
+.capture.listening{border-color:var(--accent); color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent)}
+.capture .cap-key{font:600 16px 'IBM Plex Mono', monospace; color:var(--fg); display:block; margin-top:4px}
+select{
+  font:500 13px 'Sora', sans-serif; background:var(--surface-2); color:var(--fg);
+  border:1px solid var(--line); border-radius:8px; padding:9px 10px;
+}
+.macro-steps{display:flex; flex-direction:column; gap:8px}
+.macro-step{display:flex; align-items:center; gap:8px; background:var(--surface-2); border-radius:8px; padding:8px 10px}
+.macro-step .n{font:600 11px 'IBM Plex Mono', monospace; color:var(--fg-faint); width:18px}
+.macro-step .k{flex:1; font:500 13px 'Sora', sans-serif; min-width:0}
+.macro-step button{padding:4px 8px; font-size:11px}
+.panel-actions{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:4px}
+.toast{font-size:12px; color:var(--good); opacity:0; transition:opacity .25s}
+.toast.show{opacity:1}
+
+/* fn + footer */
+.fnrow{display:flex; align-items:center; gap:10px; margin-top:18px; font-size:13px; color:var(--fg-dim)}
+footer{
+  margin-top:36px; padding-top:16px; border-top:1px solid var(--line);
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+  font-size:12px; color:var(--fg-faint);
+}
+[hidden]{display:none!important}
+</style>
+
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Phoenix4K</h1>
+    <div class="sub">Live config for the Phoenix4K macropad &mdash; no reflash, changes apply on the next keypress.</div>
+  </div>
+  <div>
+    <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Not connected</span></div>
+  </div>
+</div>
+
+<div class="empty" id="emptyState">
+  <b>Connect the Phoenix4K</b>
+  Plug it in, then click connect and pick it from the browser's device list.
+  <div style="margin-top:16px"><button class="primary" id="connectBtn">Connect device</button></div>
+  <div class="sub" style="margin-top:14px">Needs Chrome or Edge (WebHID). Works the same way on Windows, macOS and Linux &mdash; no driver install, same as any keyboard.</div>
+</div>
+
+<div id="app" hidden>
+  <div class="layers" id="layerTabs"></div>
+  <div class="keyrow" id="keyRow"></div>
+  <div class="panel" id="editor" hidden></div>
+
+  <div class="fnrow">
+    <span>Fn key (hold to shift layer):</span>
+    <select id="fnSelect">
+      <option value="255">None &mdash; single layer</option>
+      <option value="0">Key 1</option>
+      <option value="1">Key 2</option>
+      <option value="2">Key 3</option>
+      <option value="3">Key 4</option>
+    </select>
+  </div>
+
+  <footer>
+    <span id="deviceInfo"></span>
+    <button class="danger-ghost" id="resetBtn">Factory reset</button>
+  </footer>
+</div>
+
+<script>
+'use strict';
+
+// ---------- device protocol ----------
+const VID = 0x1A86, PID = 0x5722;
+const NUM_KEYS = 4, NUM_LAYERS = 2, EE_SIZE = 128;
+const EE_FNKEY_ADDR = 2, EE_CONSUMER_BASE = 4, EE_SLOTS_BASE = 20, EE_SLOT_SIZE = 13;
+const consumerAddr = (layer, key) => EE_CONSUMER_BASE + (layer * NUM_KEYS + key) * 2;
+const slotAddr = (layer, key) => EE_SLOTS_BASE + (layer * NUM_KEYS + key) * EE_SLOT_SIZE;
+
+let device = null;
+const REPORT_ID = 3;
+
+async function usbConnect() {
+  // Filtering by usagePage/usage picks out just the vendor-config collection (interface 1),
+  // not the keyboard collection too - this is a HID device now (not WebUSB), so the browser's
+  // built-in HID class driver already owns it on every platform: no WinUSB, no Zadig, nothing.
+  const devices = await navigator.hid.requestDevice({ filters: [{ vendorId: VID, productId: PID, usagePage: 0xFF00, usage: 0x01 }] });
+  if (!devices.length) throw new Error('no device selected');
+  device = devices[0];
+  if (!device.opened) await device.open();
+}
+
+function waitForReport(timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const to = setTimeout(() => { device.removeEventListener('inputreport', handler); reject(new Error('device did not respond')); }, timeoutMs);
+    function handler(e) {
+      if (e.reportId !== REPORT_ID) return;
+      clearTimeout(to);
+      device.removeEventListener('inputreport', handler);
+      resolve(new Uint8Array(e.data.buffer));
+    }
+    device.addEventListener('inputreport', handler);
+  });
+}
+
+async function usbCmd(bytes, expectLen) {
+  const payload = new Uint8Array(64);
+  payload.set(bytes);
+  const waiter = waitForReport(3000);
+  await device.sendReport(REPORT_ID, payload);
+  if (expectLen === 0) { waiter.catch(() => {}); return new Uint8Array(0); }
+  const data = await waiter;
+  return data.slice(0, expectLen ?? 64);
+}
+
+async function readEE(addr, len) { return usbCmd([0xB0, addr, len], len); }
+async function writeEE(addr, bytes) {
+  const r = await usbCmd([0xB1, addr, bytes.length, ...bytes], 1);
+  if (r[0] !== 1) throw new Error('device rejected write at addr ' + addr);
+}
+async function getInfo() { return usbCmd([0xB3], 7); }
+async function factoryReset() { await usbCmd([0xB2], 1); }
+
+// ---------- HID usage tables ----------
+// KeyboardEvent.code -> [HID usage, friendly label]. Standard USB HID keyboard usage IDs.
+const CODE_TO_HID = (() => {
+  const m = {};
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let i = 0; i < 26; i++) m['Key' + letters[i]] = [0x04 + i, letters[i]];
+  const digits = [['Digit1',0x1E,'1'],['Digit2',0x1F,'2'],['Digit3',0x20,'3'],['Digit4',0x21,'4'],
+    ['Digit5',0x22,'5'],['Digit6',0x23,'6'],['Digit7',0x24,'7'],['Digit8',0x25,'8'],['Digit9',0x26,'9'],['Digit0',0x27,'0']];
+  for (const [c,u,l] of digits) m[c] = [u,l];
+  const rest = [
+    ['Enter',0x28,'Enter'],['Escape',0x29,'Esc'],['Backspace',0x2A,'Backspace'],['Tab',0x2B,'Tab'],
+    ['Space',0x2C,'Space'],['Minus',0x2D,'-'],['Equal',0x2E,'='],['BracketLeft',0x2F,'['],
+    ['BracketRight',0x30,']'],['Backslash',0x31,'\\'],['Semicolon',0x33,';'],['Quote',0x34,"'"],
+    ['Backquote',0x35,'`'],['Comma',0x36,','],['Period',0x37,'.'],['Slash',0x38,'/'],
+    ['CapsLock',0x39,'Caps Lock'],
+    ['F1',0x3A,'F1'],['F2',0x3B,'F2'],['F3',0x3C,'F3'],['F4',0x3D,'F4'],['F5',0x3E,'F5'],['F6',0x3F,'F6'],
+    ['F7',0x40,'F7'],['F8',0x41,'F8'],['F9',0x42,'F9'],['F10',0x43,'F10'],['F11',0x44,'F11'],['F12',0x45,'F12'],
+    ['PrintScreen',0x46,'Print Screen'],['ScrollLock',0x47,'Scroll Lock'],['Pause',0x48,'Pause'],
+    ['Insert',0x49,'Insert'],['Home',0x4A,'Home'],['PageUp',0x4B,'Page Up'],['Delete',0x4C,'Delete'],
+    ['End',0x4D,'End'],['PageDown',0x4E,'Page Down'],
+    ['ArrowRight',0x4F,'→'],['ArrowLeft',0x50,'←'],['ArrowDown',0x51,'↓'],['ArrowUp',0x52,'↑'],
+    ['F13',0x68,'F13'],['F14',0x69,'F14'],['F15',0x6A,'F15'],['F16',0x6B,'F16'],
+    ['F17',0x6C,'F17'],['F18',0x6D,'F18'],['F19',0x6E,'F19'],['F20',0x6F,'F20'],
+  ];
+  for (const [c,u,l] of rest) m[c] = [u,l];
+  return m;
+})();
+const HID_TO_LABEL = (() => {
+  const t = {};
+  for (const k in CODE_TO_HID) t[CODE_TO_HID[k][0]] = CODE_TO_HID[k][1];
+  return t;
+})();
+const MOD_BIT = { ControlLeft:0x01, ShiftLeft:0x02, AltLeft:0x04, MetaLeft:0x08, ControlRight:0x10, ShiftRight:0x20, AltRight:0x40, MetaRight:0x80 };
+const MOD_LABELS = [[0x01,'Ctrl'],[0x02,'Shift'],[0x04,'Alt'],[0x08,'GUI']]; // left-side bits, shown to the user
+
+function keycodeLabel(hid) {
+  for (const k in CODE_TO_HID) if (CODE_TO_HID[k][0] === hid) return CODE_TO_HID[k][1];
+  return '0x' + hid.toString(16).toUpperCase();
+}
+function modLabel(mod) {
+  const parts = [];
+  for (const [bit, name] of MOD_LABELS) if (mod & bit) parts.push(name);
+  return parts;
+}
+
+const CONSUMER_CODES = [
+  [0x00E9, 'Volume Up'], [0x00EA, 'Volume Down'], [0x00E2, 'Mute'],
+  [0x00CD, 'Play / Pause'], [0x00B5, 'Next Track'], [0x00B6, 'Previous Track'], [0x00B7, 'Stop'],
+];
+
+// ---------- state ----------
+let currentLayer = 0;
+let selectedKey = 0;
+let fnKey = 255;
+let keyData = []; // keyData[layer][key] = {kind:'key'|'macro'|'consumer', mod, keycode, steps:[{mod,keycode}], consumer}
+
+function emptySlot() { return { kind: 'key', mod: 0, keycode: 0x1E, steps: [], consumer: 0 }; }
+
+async function loadAllConfig() {
+  const header = await readEE(0, 4);
+  fnKey = header[2];
+  keyData = [];
+  for (let layer = 0; layer < NUM_LAYERS; layer++) {
+    keyData[layer] = [];
+    for (let key = 0; key < NUM_KEYS; key++) {
+      const cons = await readEE(consumerAddr(layer, key), 2);
+      const consumer = cons[0] | (cons[1] << 8);
+      const slot = await readEE(slotAddr(layer, key), EE_SLOT_SIZE);
+      const length = slot[0];
+      const s = emptySlot();
+      s.consumer = consumer;
+      if (consumer !== 0) {
+        s.kind = 'consumer';
+      } else if (length > 1) {
+        s.kind = 'macro';
+        s.steps = [];
+        for (let i = 0; i < length && i < 6; i++) s.steps.push({ mod: slot[1 + i*2], keycode: slot[2 + i*2] });
+      } else {
+        s.kind = 'key';
+        s.mod = slot[1]; s.keycode = slot[2];
+      }
+      keyData[layer][key] = s;
+    }
+  }
+}
+
+async function saveSlot(layer, key) {
+  const s = keyData[layer][key];
+  const consAddr = consumerAddr(layer, key);
+  const cons = s.kind === 'consumer' ? s.consumer : 0;
+  await writeEE(consAddr, [cons & 0xFF, cons >> 8]);
+
+  const sAddr = slotAddr(layer, key);
+  let bytes;
+  if (s.kind === 'macro') {
+    bytes = [Math.min(s.steps.length, 6)];
+    for (const step of s.steps.slice(0, 6)) bytes.push(step.mod, step.keycode);
+  } else if (s.kind === 'key') {
+    bytes = [1, s.mod, s.keycode];
+  } else {
+    bytes = [0, 0, 0]; // consumer key: keyboard slot inactive
+  }
+  await writeEE(sAddr, bytes);
+}
+
+async function saveFnKey() { await writeEE(EE_FNKEY_ADDR, [fnKey]); }
+
+// ---------- rendering ----------
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text, cls) {
+  $('statusText').textContent = text;
+  $('statusDot').className = 'dot' + (cls ? ' ' + cls : '');
+}
+
+function renderLayerTabs() {
+  const el = $('layerTabs');
+  el.innerHTML = '';
+  const names = ['Base layer', 'Fn layer'];
+  names.forEach((name, i) => {
+    const b = document.createElement('div');
+    b.className = 'layer-tab' + (i === currentLayer ? ' active' : '');
+    b.textContent = name;
+    b.onclick = () => { currentLayer = i; renderAll(); };
+    el.appendChild(b);
+  });
+}
+
+function slotSummary(s) {
+  if (s.kind === 'consumer') {
+    const found = CONSUMER_CODES.find(c => c[0] === s.consumer);
+    return { label: found ? found[1] : 'Media', kind: 'Media key' };
+  }
+  if (s.kind === 'macro') {
+    return { label: s.steps.map(st => keycodeLabel(st.keycode)).join(' '), kind: s.steps.length + '-step macro' };
+  }
+  const mods = modLabel(s.mod);
+  const label = (mods.length ? mods.join('+') + '+' : '') + keycodeLabel(s.keycode);
+  return { label, kind: 'Key' };
+}
+
+function renderKeyRow() {
+  const el = $('keyRow');
+  el.innerHTML = '';
+  for (let key = 0; key < NUM_KEYS; key++) {
+    const tile = document.createElement('div');
+    tile.className = 'keytile' + (key === selectedKey ? ' active' : '') + (key === fnKey ? ' is-fn' : '');
+    const sum = key === fnKey ? { label: 'Fn', kind: 'Layer shift' } : slotSummary(keyData[currentLayer][key]);
+    tile.innerHTML = `<div class="idx">KEY ${key + 1}</div><div class="label">${sum.label}</div><div class="kind">${sum.kind}</div>`;
+    tile.onclick = () => { selectedKey = key; renderEditor(); renderKeyRow(); };
+    el.appendChild(tile);
+  }
+}
+
+let captureListener = null;
+function stopCapture() {
+  if (captureListener) { window.removeEventListener('keydown', captureListener, true); captureListener = null; }
+}
+
+function renderEditor() {
+  stopCapture();
+  const panel = $('editor');
+  if (selectedKey === fnKey) {
+    panel.hidden = false;
+    panel.innerHTML = `<h2>Key ${selectedKey + 1} &mdash; Fn / layer shift</h2>
+      <div class="sub">This key switches to the Fn layer while held. It never sends its own keystroke. Change which key is Fn below.</div>`;
+    return;
+  }
+  const s = keyData[currentLayer][selectedKey];
+  panel.hidden = false;
+
+  let html = `<h2>Key ${selectedKey + 1} &mdash; ${currentLayer === 0 ? 'base' : 'Fn'} layer</h2>`;
+  html += `<div class="row"><div class="seg" id="kindSeg">
+      <button data-kind="key" class="${s.kind==='key'?'active':''}">Key</button>
+      <button data-kind="macro" class="${s.kind==='macro'?'active':''}">Macro</button>
+      <button data-kind="consumer" class="${s.kind==='consumer'?'active':''}">Media</button>
+    </div></div>`;
+
+  if (s.kind === 'key') {
+    html += `<div class="mods" id="modBoxes">` +
+      MOD_LABELS.map(([bit, name]) => `<label><input type="checkbox" data-bit="${bit}" ${s.mod & bit ? 'checked' : ''}> ${name}</label>`).join('') +
+      `</div>
+      <div class="row">
+        <div class="capture" id="captureBox" tabindex="0">Click, then press a key<span class="cap-key">${keycodeLabel(s.keycode)}</span></div>
+      </div>`;
+  } else if (s.kind === 'macro') {
+    html += `<div class="macro-steps" id="macroSteps"></div>
+      <div class="row"><button id="addStepBtn" ${s.steps.length >= 6 ? 'disabled' : ''}>+ Add step (max 6)</button></div>`;
+  } else {
+    html += `<div class="row"><select id="consumerSelect">` +
+      CONSUMER_CODES.map(([code, label]) => `<option value="${code}" ${s.consumer === code ? 'selected' : ''}>${label}</option>`).join('') +
+      `</select></div>`;
+  }
+
+  html += `<div class="panel-actions"><button class="primary" id="saveBtn">Save</button><span class="toast" id="toast">Saved</span></div>`;
+  panel.innerHTML = html;
+
+  panel.querySelectorAll('#kindSeg button').forEach(b => b.onclick = () => {
+    s.kind = b.dataset.kind;
+    if (s.kind === 'macro' && s.steps.length === 0) s.steps.push({ mod: 0, keycode: 0x1E });
+    if (s.kind === 'consumer' && !s.consumer) s.consumer = CONSUMER_CODES[0][0];
+    renderEditor();
+  });
+
+  if (s.kind === 'key') {
+    panel.querySelectorAll('#modBoxes input').forEach(cb => cb.onchange = () => {
+      const bit = parseInt(cb.dataset.bit, 10);
+      s.mod = cb.checked ? (s.mod | bit) : (s.mod & ~bit);
+    });
+    const box = $('captureBox');
+    box.onclick = () => {
+      box.classList.add('listening');
+      box.querySelector('.cap-key').textContent = 'press a key...';
+      captureListener = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (MOD_BIT[e.code] !== undefined) return; // wait for a non-modifier key
+        const entry = CODE_TO_HID[e.code];
+        if (entry) s.keycode = entry[0];
+        box.classList.remove('listening');
+        box.querySelector('.cap-key').textContent = keycodeLabel(s.keycode);
+        stopCapture();
+      };
+      window.addEventListener('keydown', captureListener, true);
+    };
+  } else if (s.kind === 'macro') {
+    renderMacroSteps(s);
+    $('addStepBtn').onclick = () => { s.steps.push({ mod: 0, keycode: 0x1E }); renderEditor(); };
+  } else {
+    $('consumerSelect').onchange = (e) => { s.consumer = parseInt(e.target.value, 10); };
+  }
+
+  $('saveBtn').onclick = async () => {
+    $('saveBtn').disabled = true;
+    try {
+      await saveSlot(currentLayer, selectedKey);
+      const t = $('toast'); t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 1400);
+      renderKeyRow();
+    } catch (err) {
+      setStatus('Save failed: ' + err.message, 'err');
+    } finally {
+      $('saveBtn').disabled = false;
+    }
+  };
+}
+
+function renderMacroSteps(s) {
+  const el = $('macroSteps');
+  el.innerHTML = '';
+  s.steps.forEach((step, i) => {
+    const row = document.createElement('div');
+    row.className = 'macro-step';
+    row.innerHTML = `<span class="n">${i + 1}</span><span class="k">${modLabel(step.mod).concat([keycodeLabel(step.keycode)]).join('+')}</span>
+      <button data-act="cap">Set key</button><button data-act="del">Remove</button>`;
+    row.querySelector('[data-act="del"]').onclick = () => { s.steps.splice(i, 1); renderEditor(); };
+    row.querySelector('[data-act="cap"]').onclick = () => {
+      row.querySelector('.k').textContent = 'press a key...';
+      const listener = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (MOD_BIT[e.code] !== undefined) { step.mod ^= MOD_BIT[e.code] & 0x0F; return; }
+        const entry = CODE_TO_HID[e.code];
+        if (entry) step.keycode = entry[0];
+        window.removeEventListener('keydown', listener, true);
+        renderEditor();
+      };
+      window.addEventListener('keydown', listener, true);
+    };
+    el.appendChild(row);
+  });
+}
+
+function renderAll() {
+  renderLayerTabs();
+  renderKeyRow();
+  renderEditor();
+  $('fnSelect').value = String(fnKey);
+}
+
+// ---------- wiring ----------
+$('connectBtn').onclick = async () => {
+  try {
+    setStatus('Connecting…');
+    await usbConnect();
+    const info = await getInfo();
+    setStatus('Connected · fw v' + info[5] + '.' + info[6], 'on');
+    $('deviceInfo').textContent = `${info[0]} keys · ${info[1]} layers · up to ${info[2]}-step macros · layout v${info[4]}`;
+    await loadAllConfig();
+    $('emptyState').hidden = true;
+    $('app').hidden = false;
+    renderAll();
+  } catch (err) {
+    setStatus('Connection failed: ' + err.message, 'err');
+  }
+};
+
+$('fnSelect').onchange = async (e) => {
+  fnKey = parseInt(e.target.value, 10);
+  try {
+    await saveFnKey();
+    renderAll();
+  } catch (err) {
+    setStatus('Save failed: ' + err.message, 'err');
+  }
+};
+
+let resetArmed = false;
+$('resetBtn').onclick = async () => {
+  if (!resetArmed) {
+    resetArmed = true;
+    $('resetBtn').textContent = 'Click again to confirm';
+    $('resetBtn').classList.add('armed');
+    setTimeout(() => { resetArmed = false; $('resetBtn').textContent = 'Factory reset'; $('resetBtn').classList.remove('armed'); }, 3000);
+    return;
+  }
+  resetArmed = false;
+  $('resetBtn').textContent = 'Factory reset';
+  $('resetBtn').classList.remove('armed');
+  try {
+    await factoryReset();
+    await loadAllConfig();
+    renderAll();
+  } catch (err) {
+    setStatus('Reset failed: ' + err.message, 'err');
+  }
+};
+
+if (!navigator.hid) {
+  setStatus('WebHID not available in this browser', 'err');
+  $('connectBtn').disabled = true;
+}
+</script>
+</body>
+</html>
